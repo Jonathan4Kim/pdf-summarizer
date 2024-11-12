@@ -155,22 +155,46 @@ def logout():
     return jsonify({'message': 'logging out...'}), 200
 
 
+# chatbot initialization
+chatbot = None
+
+# Configure upload folder
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'pdf'}
+
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
 @app.route('/add_file', methods=['POST'])
 def add_file():
-    # extract file from form and filename as well
-    print('adding file...')
+    global chatbot
+
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+
     file = request.files['file']
-    filename = os.path.join('pdfs/', file.filename)
-    print('saving file...')
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
 
-    # save file and instantiate chatbot
-    file.save(filename)
-    filename = os.path.abspath(filename)
-    session['filename'] = filename
-    print(session['filename'])
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
 
-    # execute positive file parse code
-    return jsonify({'message': 'file parsed successfully'}), 200
+        # Initialize chatbot with the uploaded file
+        chatbot = Chatbot()
+        chatbot._initialize_with_file(filepath)
+
+        return jsonify({
+            'message': 'File uploaded successfully',
+        }), 200
 
 
 @app.route('/chat', methods=['POST'])
@@ -181,26 +205,29 @@ def chat():
     Passes it to chat_page to the frontend
     for the response.
     """
-    # create chatbot if it has not yet
-    chatbot = get_or_create_chatbot()
+    global chatbot
+
     if chatbot is None:
-        return jsonify({'error': 'No document uploaded yet'}), 400
+        return jsonify({'error': 'Please upload a document first'}), 400
 
-    query = request.json.get('message')
-    if not query:
-        return jsonify({'error': 'No message provided'}), 400
+    data = request.json
+    if not data or 'message' not in data:
+        return jsonify({'error': 'No message provided'}), 401
 
+    query = data['message']
     response = chatbot.ask_query(query)
-    return jsonify({'message': response}), 200
+
+    return jsonify({
+        'response': response
+    })
 
 
 @app.route('/summary', methods=['GET'])
 def get_summary():
-    chatbot = get_or_create_chatbot()
+    global chatbot
     if chatbot is None:
         return jsonify({'error': 'No document uploaded yet'}), 400
-    summary = chatbot.get_initial_summary()
-    return jsonify({'summary': summary}), 200
+    return jsonify({'summary': chatbot.summary}), 200
 
 
 if __name__ == '__main__':

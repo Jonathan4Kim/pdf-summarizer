@@ -2,56 +2,25 @@ import '../../styles.css'
 import { DocumentSVG } from './SendQuerySvg'
 import { FileUploadSVG } from './FileUploadSvg'
 import axios from 'axios'
-import {useState, useEffect} from 'react'
+import {useEffect, useState} from 'react'
 
 
 export default function ChatPage() {
     const [messages, setMessages] = useState([]);
     const [message, setMessage] = useState('');
-    const [file, setFile] = useState(null);
 
-    const initialMessage = "";
-    useEffect(() => {
-        setMessages([...messages, initialMessage]);
-    }, []);
-
-    // function that sets file only if it is a pdf
-    const handleFileChange = (e) => {
-        // set the file to the new file
-        setFile(e.target.files[0]);
-        // prevent default event
-        handleFileSubmit(e);
-    };
-
-    async function handleFileSubmit(event) {
-        // prevent default event
-        event.preventDefault();
-
-        // backend url to send pdf summary to
-        const url = 'http://127.0.0.1:5000/add_file';
-
-        // create FormData instance to send to. Append file and name
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('name', file.name);
-        const config = {
-            headers: {
-              'content-type': 'multipart/form-data',
-            },
-          };
+    useEffect( async () => {
+        const url = 'http://127.0.0.1:5000/summary';
         try {
-            // post the data to our flask backend
-            const response = await axios.post(url, formData, config);
-            console.log(response.data);
-            const data = response.data
+            const response = await axios.get(url);
             if (response.status === 200) {
-                console.log('Success:', data.message);
+                setMessages([...messages, response.data.summary]);
             }
         } catch (error) {
-            // print out error if axios call fails
-            console.error(error);
+            console.error(error)
         }
-    }
+    }, []);
+
 
 
     async function handleSubmit(e) {
@@ -89,14 +58,6 @@ export default function ChatPage() {
                 ))}
             </div>
             <div>
-                <label>
-                    <input id="pdf-file" type="file" 
-                accept=".pdf"
-                onChange = {handleFileChange}/>
-                </label>
-                <button className='query-button'>
-                        <FileUploadSVG></FileUploadSVG>
-                </button>
                 <input className='message' placeholder='Ask about the pdf...' type='textbox' value={message} onChange={e => (setMessage(e.target.value))}></input>
                 <button className='query-button' onClick={handleSubmit}>
                 <DocumentSVG className='query-svg'>
